@@ -22049,9 +22049,17 @@ VkPipeline Gta4NativeGraphicsSystem::GetOrCreatePipeline(
     return reject("unsupported-user-clip-plane-state");
   }
   // Without shaderClipDistance the clip outputs are rewritten into unused
-  // varyings at shader load, so such draws proceed unclipped.
-  if (fixed_function_state.depth_clamp_enable && !vulkan_device->properties().depthClamp) {
-    return reject("depth-clamp-unsupported");
+  // varyings at shader load, so such draws proceed unclipped. Devices without
+  // depthClamp use ordinary Vulkan depth clipping for these draws instead.
+  const bool depth_clamp_enabled =
+      fixed_function_state.depth_clamp_enable && vulkan_device->properties().depthClamp;
+  if (fixed_function_state.depth_clamp_enable && !depth_clamp_enabled) {
+    static std::atomic<uint64_t> depth_clamp_fallback_count{0};
+    const uint64_t count = ++depth_clamp_fallback_count;
+    if (count <= 8 || !(count % 1024)) {
+      REXLOG_WARN("gta4-native: depthClamp unsupported; using standard depth clipping count={}",
+                  count);
+    }
   }
   if (fixed_function_state.negative_one_to_one_clip_space &&
       !vulkan_device->properties().depthClipControl) {
@@ -22163,7 +22171,7 @@ VkPipeline Gta4NativeGraphicsSystem::GetOrCreatePipeline(
   key.depth_enable = fixed_function_state.depth_enable;
   key.depth_function = fixed_function_state.depth_function;
   key.depth_write_enable = fixed_function_state.depth_write_enable;
-  key.depth_clamp_enable = fixed_function_state.depth_clamp_enable;
+  key.depth_clamp_enable = depth_clamp_enabled;
   key.negative_one_to_one_clip_space = fixed_function_state.negative_one_to_one_clip_space;
   key.cull_mode = fixed_function_state.cull_mode;
   key.polygon_mode = uint32_t(effective_polygon_mode);
