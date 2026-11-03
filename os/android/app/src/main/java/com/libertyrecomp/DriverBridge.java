@@ -150,10 +150,11 @@ final class DriverBridge {
      * shaderInt64 is not required: without it the renderer lowers the shaders'
      * 64-bit integers (buffer addresses) to 32-bit pairs (Mali Edition).
      */
+    // These features are required after the renderer's Mali fallbacks are applied.
+    // depthClamp is disabled per pipeline when unsupported, while descriptor
+    // indexing falls back to the cached native descriptor backend.
     private static final String[] REQUIRED_FEATURES = {
-            "depthClamp", "sampleRateShading",
-            "independentBlend", "runtimeDescriptorArray", "descriptorBindingPartiallyBound",
-            "bufferDeviceAddress",
+            "sampleRateShading", "independentBlend", "bufferDeviceAddress",
     };
 
     /**
