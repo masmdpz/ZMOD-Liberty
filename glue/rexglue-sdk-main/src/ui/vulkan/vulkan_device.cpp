@@ -1027,7 +1027,7 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
 #undef XE_UI_VULKAN_ENUM_PROPERTY_2
 #undef XE_UI_VULKAN_FEATURE_2
 
-  // Create the device.
+  // Create the device after selecting only capabilities supported by this driver.
 
   const VkResult device_create_result =
       ifn.vkCreateDevice(physical_device, &device_create_info, nullptr, &device->device_);
