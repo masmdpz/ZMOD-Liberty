@@ -22859,6 +22859,20 @@ VkPipeline Gta4NativeGraphicsSystem::GetOrCreatePipeline(
         static_cast<uint64_t>(static_cast<int64_t>(pipeline_result)));
   }
   if (pipeline_result != VK_SUCCESS) {
+    // Keep the detailed driver result separate from the bounded generic reject
+    // trace. Mali and other mobile drivers may reject a pipeline for optional
+    // features or shader-interface details that the high-level reason hides.
+    static std::atomic<uint64_t> pipeline_create_failure_count{0};
+    const uint64_t failure = ++pipeline_create_failure_count;
+    if (failure <= 8 || !(failure % 1024)) {
+      REXLOG_ERROR(
+          "gta4-native-diag: vk-create-pipeline-result #{} VkResult={} primitive={} "
+          "topology={} samples={} depth-format={} depth-clamp={} depth-clip-control={} "
+          "polygon-mode={} indexed-descriptors={}",
+          failure, int32_t(pipeline_result), primitive_type, uint32_t(topology),
+          uint32_t(target.samples), uint32_t(key.depth_format), key.depth_clamp_enable,
+          key.negative_one_to_one_clip_space, key.polygon_mode, key.indexed_descriptors);
+    }
     return reject("vk-create-pipeline");
   }
 
