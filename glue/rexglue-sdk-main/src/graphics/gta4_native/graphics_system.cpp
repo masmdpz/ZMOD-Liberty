@@ -22847,9 +22847,39 @@ VkPipeline Gta4NativeGraphicsSystem::GetOrCreatePipeline(
   }
   if (g_capture_pipeline_statistics.load(std::memory_order_relaxed))
     pipeline_info.flags |= VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR;
-  const VkResult pipeline_result = profile::CpuCall(profile::CpuOp::kDriverPipeline, [&] { return vulkan_device->functions().vkCreateGraphicsPipelines(
+  VkResult pipeline_result = profile::CpuCall(profile::CpuOp::kDriverPipeline, [&] { return vulkan_device->functions().vkCreateGraphicsPipelines(
       vulkan_device->device(), native_pipeline_cache_, 1, &pipeline_info, nullptr, &pipeline); });
   RecordNativePipelineTiming(rex::chrono::Clock::QueryHostTickCount() - pipeline_start);
+
+  // Some ARM mobile drivers fail the optimized pipeline path for otherwise
+  // valid native shaders. Retry the exact same pipeline without a driver cache
+  // and with optimization disabled. This preserves the pipeline's shader and
+  // rendering semantics; it only asks the driver for a more conservative build.
+  if (pipeline_result != VK_SUCCESS &&
+      vulkan_device->properties().driverID == VK_DRIVER_ID_ARM_PROPRIETARY) {
+    const VkResult original_result = pipeline_result;
+    if (pipeline != VK_NULL_HANDLE) {
+      profile::CpuCall(profile::CpuOp::kDriverDestruction, [&] {
+        return vulkan_device->functions().vkDestroyPipeline(
+            vulkan_device->device(), pipeline, nullptr);
+      });
+      pipeline = VK_NULL_HANDLE;
+    }
+    VkGraphicsPipelineCreateInfo fallback_info = pipeline_info;
+    fallback_info.flags |= VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
+    const uint64_t fallback_start = rex::chrono::Clock::QueryHostTickCount();
+    const VkResult fallback_result = profile::CpuCall(
+        profile::CpuOp::kDriverPipeline, [&] {
+          return vulkan_device->functions().vkCreateGraphicsPipelines(
+              vulkan_device->device(), VK_NULL_HANDLE, 1, &fallback_info, nullptr, &pipeline);
+        });
+    RecordNativePipelineTiming(rex::chrono::Clock::QueryHostTickCount() - fallback_start);
+    REXLOG_WARN(
+        "gta4-native-diag: arm-pipeline-retry original-VkResult={} fallback-VkResult={} "
+        "optimized-cache=false",
+        int32_t(original_result), int32_t(fallback_result));
+    pipeline_result = fallback_result;
+  }
   if (trace_pipeline) {
     transition::Record(
         transition::EventSource::kRenderer, transition::EventType::kPipelineMissEnd, 0, 0,
