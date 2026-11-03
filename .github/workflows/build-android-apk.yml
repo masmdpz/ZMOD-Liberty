@@ -10,7 +10,7 @@ name: Android APK
 
 on:
   push:
-    branches: [mali-dimensity-8400]
+    branches: [mali-dimensity-8400, mali-g52-mc2]
     # Changes that cannot affect the APK do not start a build: documentation,
     # images for the README, and the other workflows.
     paths-ignore:
