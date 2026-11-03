@@ -107,7 +107,7 @@ jobs:
 
       # The slow step. Its own timeout leaves time for the cache save below,
       # so a build that runs out of time keeps its progress for the next run.
-      - name: Build the native libraries
+      - name: Build the native libraries (Mali-G52 compatibility)
         timeout-minutes: 320
         run: |
           export ANDROID_HOME="$(cygpath -u "$ANDROID_HOME")"
