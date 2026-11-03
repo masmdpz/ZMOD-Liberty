@@ -127,10 +127,12 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
         properties.deviceName);
   }
   if (with_native_shader_support && !supported_features.depthClamp) {
+    // Mali-G52 and other Vulkan devices may not expose depthClamp. The native
+    // renderer has a per-pipeline fallback that leaves depth clamping disabled
+    // and uses Vulkan's ordinary clip volume instead.
     REXLOG_WARN(
-        "Vulkan device '{}' doesn't support depthClamp required by Liberty native rendering",
+        "Vulkan device '{}' lacks depthClamp; native rendering will use standard depth clipping",
         properties.deviceName);
-    return nullptr;
   }
   if (with_native_shader_support && !supported_features.sampleRateShading) {
     // Declared statically by the per-sample fullscreen conversion shaders. A
@@ -526,14 +528,19 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
 
   if (with_native_shader_support &&
       (!features_1_2.supported.runtimeDescriptorArray ||
-       !features_1_2.supported.descriptorBindingPartiallyBound ||
-       !features_1_2.supported.bufferDeviceAddress)) {
+       !features_1_2.supported.descriptorBindingPartiallyBound)) {
+    // CreateNativeDescriptors automatically chooses its cached descriptor
+    // backend when bindless descriptor indexing is unavailable.
     REXLOG_WARN(
-        "Vulkan device '{}' lacks native shader features: runtimeDescriptorArray={}, "
-        "descriptorBindingPartiallyBound={}, bufferDeviceAddress={}",
-        properties.deviceName, features_1_2.supported.runtimeDescriptorArray != VK_FALSE,
-        features_1_2.supported.descriptorBindingPartiallyBound != VK_FALSE,
-        features_1_2.supported.bufferDeviceAddress != VK_FALSE);
+        "Vulkan device '{}' lacks descriptor indexing features; using cached native descriptors",
+        properties.deviceName);
+  }
+  if (with_native_shader_support && !features_1_2.supported.bufferDeviceAddress) {
+    // The native renderer uses physical buffer addresses in its shader ABI;
+    // unlike descriptor indexing, this feature has no equivalent fallback.
+    REXLOG_WARN(
+        "Vulkan device '{}' lacks required native shader feature bufferDeviceAddress",
+        properties.deviceName);
     return nullptr;
   }
   if (with_dynamic_rendering) {
